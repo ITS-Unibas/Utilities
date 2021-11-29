@@ -55,8 +55,8 @@ function Get-GPImpact
 
         $GpoName = $Gpo.DisplayName
 
-        $ResultObbject = @{}
-        $ResultObbject.GpoName = $GpoName
+        $ResultHashtable = @{}
+        $ResultHashtable.GpoName = $GpoName
 
         $ous = Get-ADOrganizationalUnit -Filter * -Properties gplink | Where-Object { $_.gplink -like "*$($gpo.id)*" }
 
@@ -81,7 +81,7 @@ function Get-GPImpact
                     {
                         Write-Verbose $ou.distinguishedname
 
-                        $ResultObbject.AffectedObjects = Get-ADObject -SearchBase $ou.distinguishedname -Filter * |
+                        $ResultHashtable.AffectedObjects = Get-ADObject -SearchBase $ou.distinguishedname -Filter * |
                             Where-Object { @('user', 'computer') -contains $_.objectclass } |
                             Select-Object Name, ObjectClass
                     }
@@ -101,7 +101,7 @@ function Get-GPImpact
                     if ($groupMembers)
                     {
                         Write-Verbose "GroupMember count: $($groupMembers.count)"
-                        $ResultObbject.AffectedObjects = foreach ($OU in $OUs)
+                        $ResultHashtable.AffectedObjects = foreach ($OU in $OUs)
                         {
                             Get-ADObject -SearchBase $ou.DistinguishedName -Filter * |
                                 Where-Object { @('user', 'computer') -contains $_.objectclass } |
@@ -112,7 +112,7 @@ function Get-GPImpact
 
                     #Find all users and computers explicitly within scope
                     Write-Verbose 'Users'
-                    $ResultObbject.AffectedObjects += ForEach ($object in ($scope | Where-Object { @('user', 'computer') -contains $_.Trustee.SidType }))
+                    $ResultHashtable.AffectedObjects += ForEach ($object in ($scope | Where-Object { @('user', 'computer') -contains $_.Trustee.SidType }))
                     {
                         Write-Verbose $Object.Trustee.Name
 
@@ -143,6 +143,10 @@ function Get-GPImpact
     }
     End
     {
-        [PSCustomObject]$ResultObbject
+        [PSCustomObject]$ResultHashtable |
+            Add-Member -MemberType ScriptProperty -Name AffectedUsers -Value {$this.AffectedObjects.Where{$_.ObjectClass -eq 'user'}} -PassThru |
+            Add-Member -MemberType ScriptProperty -Name AffectedUsersCount -Value {$this.AffectedUsers.Count} -PassThru |
+            Add-Member -MemberType ScriptProperty -Name AffectedComputers -Value {$this.AffectedObjects.Where{$_.ObjectClass -eq 'computer'}} -PassThru |
+            Add-Member -MemberType ScriptProperty -Name AffectedComputersCount -Value {$this.AffectedComputers.Count} -PassThru
     }
 }
